@@ -149,7 +149,8 @@ namespace geoflow::nodes::cityjson {
     nlohmann::json::object_t mesh2jSolid(const Mesh& mesh, const char* lod, std::map<arr3f, size_t>& vertex_map) {
       auto geometry = nlohmann::json::object();
       geometry["type"] = "Solid";
-      geometry["lod"] = atof(lod);
+      // geometry["lod"] = atof(lod);
+      geometry["lod"] = lod;
       std::vector<std::vector<std::vector<size_t>>> exterior_shell;
 
       for (auto &face : mesh.get_polygons())
@@ -185,7 +186,7 @@ namespace geoflow::nodes::cityjson {
       nlohmann::json outputJSON;
 
       outputJSON["type"] = "CityJSON";
-      outputJSON["version"] = "1.0";
+      outputJSON["version"] = "1.1";
       outputJSON["CityObjects"] = nlohmann::json::object();
 
       std::map<arr3f, size_t> vertex_map;
@@ -233,7 +234,7 @@ namespace geoflow::nodes::cityjson {
         
         // footprint geometry
         auto fp_geometry = nlohmann::json::object();
-        fp_geometry["lod"] = 0;
+        fp_geometry["lod"] = "0";
         fp_geometry["type"] = "MultiSurface";
 
         auto& footprint = footprints.get<LinearRing>(i);
@@ -304,6 +305,9 @@ namespace geoflow::nodes::cityjson {
         {"translate", *manager.data_offset},
         {"scale", {0.001, 0.001, 0.001}}
       };
+
+      // metadata
+      // "metadata":{"geographicalExtent":[84372.90299658204,446339.80099951173,-1.6206239461898804,85051.81354956055,447006.0341881409,35.51251220703125],"citymodelIdentifier":"6118726d-ed69-4c62-8eb6-0b39f3a8623e","datasetReferenceDate":"2021-03-04","datasetCharacterSet":"UTF-8","datasetTopicCategory":"geoscientificInformation","distributionFormatVersion":"1.0","spatialRepresentationType":"vector","metadataStandard":"ISO 19115 - Geographic Information - Metadata","metadataStandardVersion":"ISO 19115:2014(E)","metadataCharacterSet":"UTF-8","metadataDateStamp":"2021-03-04","textures":"absent","materials":"absent","cityfeatureMetadata":{"Building":{"uniqueFeatureCount":1304,"aggregateFeatureCount":3912,"presentLoDs":{"1.2":1304,"1.3":1304,"2.2":1304}}},"presentLoDs":{"1.2":1304,"1.3":1304,"2.2":1304},"thematicModels":["Building"],"referenceSystem":"urn:ogc:def:crs:EPSG::7415","fileIdentifier":"5907.json"}
 
       std::ofstream ofs;
       ofs.open(manager.substitute_globals(filepath_));
