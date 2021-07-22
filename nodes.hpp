@@ -90,6 +90,7 @@ namespace geoflow::nodes::cityjson {
 
     // parameter variables
     std::string filepath_;
+    std::string identifier_attribute_ = "";
 
     public:
     using Node::Node;
@@ -212,10 +213,19 @@ namespace geoflow::nodes::cityjson {
             jattributes[tname] = term->get<const bool&>(i);
           } else if (term->accepts_type(typeid(float))) {
             jattributes[tname] = term->get<const float&>(i);
+            if (tname == identifier_attribute_) {
+              b_id = std::to_string(term->get<const float&>(i));
+            }
           } else if (term->accepts_type(typeid(int))) {
             jattributes[tname] = term->get<const int&>(i);
+            if (tname == identifier_attribute_) {
+              b_id = std::to_string(term->get<const int&>(i));
+            }
           } else if (term->accepts_type(typeid(std::string))) {
             jattributes[tname] = term->get<const std::string&>(i);
+            if (tname == identifier_attribute_) {
+              b_id = term->get<const std::string&>(i);
+            }
           }
         }
 
