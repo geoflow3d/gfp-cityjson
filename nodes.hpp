@@ -1,5 +1,6 @@
 #include <fstream>
 #include <iomanip>
+#include <ctime>
 #include <geoflow/geoflow.hpp>
 #include <nlohmann/json.hpp>
 
@@ -91,11 +92,18 @@ namespace geoflow::nodes::cityjson {
     // parameter variables
     std::string filepath_;
     std::string identifier_attribute_ = "";
+    std::string referenceSystem_ = "https://www.opengis.net/def/crs/EPSG/0/7415";
+    std::string citymodelIdentifier_ = "42";
+    std::string datasetTitle_ = "3D BAG development";
+    std::string datasetReferenceDate_ = "1970-01-01";
+    std::string geographicLocation_ = "The Netherlands";
+
+    bool prettyPrint_ = false;
 
     public:
     using Node::Node;
     
-    void init() {
+    void init() override {
       // declare ouput terminals
       add_vector_input("footprints", typeid(LinearRing));
       add_vector_input("geometry_lod12", typeid(std::unordered_map<int, Mesh>));
@@ -104,9 +112,35 @@ namespace geoflow::nodes::cityjson {
       add_poly_input("part_attributes", {typeid(bool), typeid(int), typeid(float), typeid(std::string)});
       add_poly_input("attributes", {typeid(bool), typeid(int), typeid(float), typeid(std::string)});
 
+      // find current date
+      auto t = std::time(nullptr);
+      auto tm = *std::localtime(&t);
+
+      std::ostringstream oss;
+      oss << std::put_time(&tm, "%Y-%m-%d");
+      datasetReferenceDate_ = oss.str();
+
       // declare parameters
       add_param(ParamPath(filepath_, "filepath", "File path"));
+      add_param(ParamString(identifier_attribute_, "identifier_attribute", "Attribute to use for CityObject ID"));
+      add_param(ParamString(referenceSystem_, "referenceSystem", "referenceSystem"));
+      add_param(ParamString(citymodelIdentifier_, "citymodelIdentifier", "citymodelIdentifier"));
+      add_param(ParamString(datasetTitle_, "datasetTitle", "datasetTitle"));
+      add_param(ParamString(datasetReferenceDate_, "datasetReferenceDate", "datasetReferenceDate"));
+      add_param(ParamString(geographicLocation_, "geographicLocation", "geographicLocation"));
+      add_param(ParamBool(prettyPrint_, "prettyPrint", "Pretty print CityJSON output"));
       // add_param(ParamInt(extract_lod_, "extract_lod", "precision"));
+    }
+
+    bool inputs_valid() override {
+      return 
+        input("footprints").has_data() &&
+        input("geometry_lod12").has_data() &&
+        input("geometry_lod13").has_data() &&
+        input("geometry_lod22").has_data() &&
+        poly_input("attributes").has_data()
+        ;
+      
     }
 
     void add_vertices_polygon(std::map<arr3f, size_t>& vertex_map, std::vector<arr3f>& vertex_vec, std::set<arr3f>& vertex_set, const LinearRing& polygon) {
@@ -179,7 +213,7 @@ namespace geoflow::nodes::cityjson {
       return geometry;
     }
 
-    void process() {
+    void process() override {
       // inputs
       auto& footprints = vector_input("footprints");
 
@@ -193,6 +227,7 @@ namespace geoflow::nodes::cityjson {
       std::vector<arr3f> vertex_vec;
       std::set<arr3f> vertex_set;
       size_t id_cntr = 0;
+      size_t bp_counter = 0;
 
       auto& multisolids_lod12 = vector_input("geometry_lod12");
       auto& multisolids_lod13 = vector_input("geometry_lod13");
@@ -246,8 +281,9 @@ namespace geoflow::nodes::cityjson {
         std::vector<std::string> buildingPartIds;
 
         // geometries
-         const auto& solids_lod12 = multisolids_lod12.get<std::unordered_map<int, Mesh>>(i);
+        const auto& solids_lod12 = multisolids_lod12.get<std::unordered_map<int, Mesh>>(i);
         const auto& solids_lod13 = multisolids_lod13.get<std::unordered_map<int, Mesh>>(i);
+
         for ( const auto& [sid, solid_lod22] : multisolids_lod22.get<std::unordered_map<int, Mesh>>(i) ) {
           auto buildingPart = nlohmann::json::object();
           auto bp_id = std::to_string(++id_cntr);
@@ -270,15 +306,16 @@ namespace geoflow::nodes::cityjson {
             if (!term->get_data_vec()[i].has_value()) continue;
             auto tname = term->get_name();
             if (term->accepts_type(typeid(bool))) {
-              jattributes[tname] = term->get<const bool&>(i);
+              jattributes[tname] = term->get<const bool&>(bp_counter);
             } else if (term->accepts_type(typeid(float))) {
-              jattributes[tname] = term->get<const float&>(i);
+              jattributes[tname] = term->get<const float&>(bp_counter);
             } else if (term->accepts_type(typeid(int))) {
-              jattributes[tname] = term->get<const int&>(i);
+              jattributes[tname] = term->get<const int&>(bp_counter);
             } else if (term->accepts_type(typeid(std::string))) {
-              jattributes[tname] = term->get<const std::string&>(i);
+              jattributes[tname] = term->get<const std::string&>(bp_counter);
             }
           }
+          ++bp_counter;
           buildingPart["attributes"] = jattributes;
 
           outputJSON["CityObjects"][bp_id] = buildingPart;
@@ -320,11 +357,11 @@ namespace geoflow::nodes::cityjson {
       };
 
       // TODO create node parameters for these
-      metadata["referenceSystem"] = "https://www.opengis.net/def/crs/EPSG/0/7415";
-      metadata["citymodelIdentifier"] = "xxx";
-      metadata["datasetTitle"] = "3D BAG ...";
-      metadata["datasetReferenceDate"] = "2021-08-01";
-      metadata["geographicLocation"] = "The Netherlands";
+      metadata["referenceSystem"] = referenceSystem_;
+      metadata["citymodelIdentifier"] = citymodelIdentifier_;
+      metadata["datasetTitle"] = datasetTitle_;
+      metadata["datasetReferenceDate"] = datasetReferenceDate_;
+      metadata["geographicLocation"] = geographicLocation_;
       // "metadata":{"geographicalExtent":[84372.90299658204,446339.80099951173,-1.6206239461898804,85051.81354956055,447006.0341881409,35.51251220703125],"citymodelIdentifier":"6118726d-ed69-4c62-8eb6-0b39f3a8623e","datasetReferenceDate":"2021-03-04","datasetCharacterSet":"UTF-8","datasetTopicCategory":"geoscientificInformation","distributionFormatVersion":"1.0","spatialRepresentationType":"vector","metadataStandard":"ISO 19115 - Geographic Information - Metadata","metadataStandardVersion":"ISO 19115:2014(E)","metadataCharacterSet":"UTF-8","metadataDateStamp":"2021-03-04","textures":"absent","materials":"absent","cityfeatureMetadata":{"Building":{"uniqueFeatureCount":1304,"aggregateFeatureCount":3912,"presentLoDs":{"1.2":1304,"1.3":1304,"2.2":1304}}},"presentLoDs":{"1.2":1304,"1.3":1304,"2.2":1304},"thematicModels":["Building"],"referenceSystem":"urn:ogc:def:crs:EPSG::7415","fileIdentifier":"5907.json"}
 
       outputJSON["metadata"] = metadata;
@@ -333,7 +370,10 @@ namespace geoflow::nodes::cityjson {
       ofs.open(manager.substitute_globals(filepath_));
       ofs << std::fixed << std::setprecision(2);
       try {
-        ofs << outputJSON.dump(4);
+        if (prettyPrint_)
+          ofs << outputJSON.dump(2);
+        else
+          ofs << outputJSON;
       } catch (const std::exception& e) {
         std::cerr << e.what();
         return;
