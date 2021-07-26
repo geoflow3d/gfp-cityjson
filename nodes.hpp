@@ -122,7 +122,7 @@ namespace geoflow::nodes::cityjson {
 
       // declare parameters
       add_param(ParamPath(filepath_, "filepath", "File path"));
-      add_param(ParamString(identifier_attribute_, "identifier_attribute", "Attribute to use for CityObject ID"));
+      add_param(ParamString(identifier_attribute_, "identifier_attribute", "Attribute to use for CityObject ID (leave empty for auto ID generation). Only works for int and string attributes."));
       add_param(ParamString(referenceSystem_, "referenceSystem", "referenceSystem"));
       add_param(ParamString(citymodelIdentifier_, "citymodelIdentifier", "citymodelIdentifier"));
       add_param(ParamString(datasetTitle_, "datasetTitle", "datasetTitle"));
@@ -241,6 +241,7 @@ namespace geoflow::nodes::cityjson {
         // building["children"]
 
         // Building atributes
+        bool id_from_attr = false;
         auto jattributes = nlohmann::json::object();
         for (auto& term : poly_input("attributes").sub_terminals()) {
           if (!term->get_data_vec()[i].has_value()) continue;
@@ -256,11 +257,13 @@ namespace geoflow::nodes::cityjson {
             jattributes[tname] = term->get<const int&>(i);
             if (tname == identifier_attribute_) {
               b_id = std::to_string(term->get<const int&>(i));
+              id_from_attr = true;
             }
           } else if (term->accepts_type(typeid(std::string))) {
             jattributes[tname] = term->get<const std::string&>(i);
             if (tname == identifier_attribute_) {
               b_id = term->get<const std::string&>(i);
+              id_from_attr = true;
             }
           }
         }
@@ -287,6 +290,9 @@ namespace geoflow::nodes::cityjson {
         for ( const auto& [sid, solid_lod22] : multisolids_lod22.get<std::unordered_map<int, Mesh>>(i) ) {
           auto buildingPart = nlohmann::json::object();
           auto bp_id = std::to_string(++id_cntr);
+          if (id_from_attr) {
+            bp_id = b_id + "-" + std::to_string(sid);
+          }
           buildingPartIds.push_back(bp_id);
           buildingPart["type"] = "BuildingPart";
           buildingPart["parents"] = {b_id};
