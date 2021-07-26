@@ -100,6 +100,9 @@ namespace geoflow::nodes::cityjson {
 
     bool prettyPrint_ = false;
 
+    vec1s key_options;
+    StrMap output_attribute_names;
+
     public:
     using Node::Node;
     
@@ -122,15 +125,24 @@ namespace geoflow::nodes::cityjson {
 
       // declare parameters
       add_param(ParamPath(filepath_, "filepath", "File path"));
-      add_param(ParamString(identifier_attribute_, "identifier_attribute", "Attribute to use for CityObject ID (leave empty for auto ID generation). Only works for int and string attributes."));
+      add_param(ParamString(identifier_attribute_, "identifier_attribute", "(Renamed) attribute to use for CityObject ID (leave empty for auto ID generation). Only works for int and string attributes."));
       add_param(ParamString(referenceSystem_, "referenceSystem", "referenceSystem"));
       add_param(ParamString(citymodelIdentifier_, "citymodelIdentifier", "citymodelIdentifier"));
       add_param(ParamString(datasetTitle_, "datasetTitle", "datasetTitle"));
       add_param(ParamString(datasetReferenceDate_, "datasetReferenceDate", "datasetReferenceDate"));
       add_param(ParamString(geographicLocation_, "geographicLocation", "geographicLocation"));
       add_param(ParamBool(prettyPrint_, "prettyPrint", "Pretty print CityJSON output"));
-      // add_param(ParamInt(extract_lod_, "extract_lod", "precision"));
+      add_param(ParamStrMap(output_attribute_names, key_options, "output_attribute_names", "Output attribute names"));
     }
+
+    void on_receive(gfMultiFeatureInputTerminal& it) {
+      key_options.clear();
+      if(&it == &poly_input("attributes")) {
+        for(auto sub_term : it.sub_terminals()) {
+          key_options.push_back(sub_term->get_name());
+        }
+      }
+    };
 
     bool inputs_valid() override {
       return 
@@ -228,6 +240,7 @@ namespace geoflow::nodes::cityjson {
       std::set<arr3f> vertex_set;
       size_t id_cntr = 0;
       size_t bp_counter = 0;
+      std::string identifier_attribute = manager.substitute_globals(identifier_attribute_);
 
       auto& multisolids_lod12 = vector_input("geometry_lod12");
       auto& multisolids_lod13 = vector_input("geometry_lod13");
@@ -246,22 +259,31 @@ namespace geoflow::nodes::cityjson {
         for (auto& term : poly_input("attributes").sub_terminals()) {
           if (!term->get_data_vec()[i].has_value()) continue;
           auto tname = term->get_name();
+          
+          //see if we need to rename this attribute
+          auto search = output_attribute_names.find(tname);
+          if(search != output_attribute_names.end()) {
+            //ignore if the new name is an empty string
+            if(search->second.size()!=0)
+              tname = search->second;
+          }
+
           if (term->accepts_type(typeid(bool))) {
             jattributes[tname] = term->get<const bool&>(i);
           } else if (term->accepts_type(typeid(float))) {
             jattributes[tname] = term->get<const float&>(i);
-            if (tname == identifier_attribute_) {
+            if (tname == identifier_attribute) {
               b_id = std::to_string(term->get<const float&>(i));
             }
           } else if (term->accepts_type(typeid(int))) {
             jattributes[tname] = term->get<const int&>(i);
-            if (tname == identifier_attribute_) {
+            if (tname == identifier_attribute) {
               b_id = std::to_string(term->get<const int&>(i));
               id_from_attr = true;
             }
           } else if (term->accepts_type(typeid(std::string))) {
             jattributes[tname] = term->get<const std::string&>(i);
-            if (tname == identifier_attribute_) {
+            if (tname == identifier_attribute) {
               b_id = term->get<const std::string&>(i);
               id_from_attr = true;
             }
@@ -289,10 +311,8 @@ namespace geoflow::nodes::cityjson {
 
         for ( const auto& [sid, solid_lod22] : multisolids_lod22.get<std::unordered_map<int, Mesh>>(i) ) {
           auto buildingPart = nlohmann::json::object();
-          auto bp_id = std::to_string(++id_cntr);
-          if (id_from_attr) {
-            bp_id = b_id + "-" + std::to_string(sid);
-          }
+          auto bp_id = b_id + "-" + std::to_string(sid);
+          
           buildingPartIds.push_back(bp_id);
           buildingPart["type"] = "BuildingPart";
           buildingPart["parents"] = {b_id};
