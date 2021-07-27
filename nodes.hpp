@@ -1,8 +1,11 @@
 #include <fstream>
 #include <iomanip>
 #include <ctime>
+#include <filesystem>
 #include <geoflow/geoflow.hpp>
 #include <nlohmann/json.hpp>
+
+namespace fs = std::filesystem;
 
 namespace geoflow::nodes::cityjson {
   
@@ -392,8 +395,11 @@ namespace geoflow::nodes::cityjson {
 
       outputJSON["metadata"] = metadata;
 
+      auto fname = fs::path(manager.substitute_globals(filepath_));
+      fs::create_directories(fname.parent_path());
+
       std::ofstream ofs;
-      ofs.open(manager.substitute_globals(filepath_));
+      ofs.open(fname);
       ofs << std::fixed << std::setprecision(2);
       try {
         if (prettyPrint_)
