@@ -102,6 +102,7 @@ namespace geoflow::nodes::cityjson {
     std::string geographicLocation_ = "The Netherlands";
 
     bool prettyPrint_ = false;
+    bool version_1_0_ = true;
 
     vec1s key_options;
     StrMap output_attribute_names;
@@ -135,6 +136,7 @@ namespace geoflow::nodes::cityjson {
       add_param(ParamString(datasetReferenceDate_, "datasetReferenceDate", "datasetReferenceDate"));
       add_param(ParamString(geographicLocation_, "geographicLocation", "geographicLocation"));
       add_param(ParamBool(prettyPrint_, "prettyPrint", "Pretty print CityJSON output"));
+      add_param(ParamBool(version_1_0_, "version_1_0", "Output CityJSON v1.0 instead of v1.1"));
       add_param(ParamStrMap(output_attribute_names, key_options, "output_attribute_names", "Output attribute names"));
     }
 
@@ -198,8 +200,11 @@ namespace geoflow::nodes::cityjson {
     nlohmann::json::object_t mesh2jSolid(const Mesh& mesh, const char* lod, std::map<arr3f, size_t>& vertex_map) {
       auto geometry = nlohmann::json::object();
       geometry["type"] = "Solid";
-      // geometry["lod"] = atof(lod);
-      geometry["lod"] = lod;
+      if(version_1_0_) {
+        geometry["lod"] = atof(lod);
+      } else {
+        geometry["lod"] = lod;
+      };
       std::vector<std::vector<std::vector<size_t>>> exterior_shell;
 
       for (auto &face : mesh.get_polygons())
@@ -235,7 +240,11 @@ namespace geoflow::nodes::cityjson {
       nlohmann::json outputJSON;
 
       outputJSON["type"] = "CityJSON";
-      outputJSON["version"] = "1.1";
+      if (version_1_0_) {
+        outputJSON["version"] = "1.0";
+      } else {
+        outputJSON["version"] = "1.1";
+      };
       outputJSON["CityObjects"] = nlohmann::json::object();
 
       std::map<arr3f, size_t> vertex_map;
@@ -297,7 +306,11 @@ namespace geoflow::nodes::cityjson {
         
         // footprint geometry
         auto fp_geometry = nlohmann::json::object();
-        fp_geometry["lod"] = "0";
+        if (version_1_0_) { 
+          fp_geometry["lod"] = 0;
+        } else {
+          fp_geometry["lod"] = "0";
+        }
         fp_geometry["type"] = "MultiSurface";
 
         auto& footprint = footprints.get<LinearRing>(i);
